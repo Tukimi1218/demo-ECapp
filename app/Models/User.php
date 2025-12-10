@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'stripe_customer_id',
     ];
 
     /**
@@ -42,4 +44,59 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            $paymentMethods = \App\Models\PaymentMethod::all(); // すべての支払い方法を取得
+
+            foreach ($paymentMethods as $paymentMethod) {
+                \App\Models\UserPaymentMethod::create([
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethod->id,
+                    'is_default' => true,
+                ]);
+            }
+        });
+    }
+
+    public function products() {
+        return $this->hasMany(Product::class);
+    }
+
+    public function reviews() {
+        return $this->hasMany(ProductReview::class);
+    }
+
+    public function favorites() {
+        return $this->belongsToMany(Product::class, 'favorites', 'user_id', 'product_id')->withTimestamps();
+    }
+
+    public function cartItems() {
+        return $this->hasMany(CartItem::class);
+    }
+
+    public function cards()
+    {
+        return $this->hasMany(Card::class);
+    }
+
+    public function notifications() {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function paymentMethods()
+    {
+        return $this->belongsToMany(PaymentMethod::class, 'user_payment_methods')
+                    ->withPivot('is_default', 'is_selected')
+                    ->withTimestamps();
+    }
+
+    public function orders() {
+        return $this->hasMany(Order::class);
+    }
+
+    public function userPaymentMethods() {
+        return $this->hasMany(UserPaymentMethod::class);
+    }
 }
